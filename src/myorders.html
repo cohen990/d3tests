@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+	<script src="d3.v4.js"></script>
+	<script
+		src="https://code.jquery.com/jquery-3.1.1.min.js"
+		integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="
+		crossorigin="anonymous"></script>
+	<meta charset="utf-8">
+	<style>
+		text {
+			font: 20px sans-serif;
+			text-anchor: middle;
+		}
+
+	</style>
+</head>
+<body>
+	<select id="dropdown">
+		<option value="sample" selected="selected">Sample Person</option>
+		<option value="1">First Person</option>
+		<option value="2">Second Person</option>
+		<option value="3">Third Person</option>
+	</select>
+
+	<svg id="piechart" width="960" height="880"></svg>
+
+	<script type="text/javascript">
+		function drawPieChart(userId){
+			var svg = d3.select("svg");
+			var width = svg.attr("width");
+			var height = svg.attr("height");
+			var radius = Math.min(width, height) / 2;
+			var transform = "translate(" + width / 2 + "," + height / 2 + ")";
+			svg.attr("transform", transform);
+			svg.append("g")
+				.attr("class", "arc");
+
+			
+			var color = d3.scaleOrdinal(d3.schemeCategory20);
+			
+			console.log("width:", width);
+			console.log("height:", height);
+			console.log("radius:", radius);
+
+			var arc = d3.arc()
+				.outerRadius(radius - 10)
+				.innerRadius(1);
+
+
+			var counts = {};
+			d3.csv(userId+".csv", function(data) {
+				var key = data.Restaurantname;
+				if (!counts[key]){
+					counts[key] = {value: 1};
+				}
+				else{
+					counts[key].value = counts[key].value + 1;
+				}
+			}, function(error, classes) {
+				if (error) throw error;
+
+
+				var dataAsArray = transformCountsFromObjectToArrayOfObjects(counts);
+				var sortedData = bubbleSort(dataAsArray);
+				console.log("Found orders from " + sortedData.length + " restaurants. Using top 20")
+
+
+				var pie = d3.pie()
+					.value(function(d) { return d.value; })(sortedData.slice(0, 20));
+
+				var arcs = svg.selectAll("g.slice")
+					.data(pie)
+					.enter()
+					.append("svg:g")
+					.attr("class", "slice")
+					.attr("transform", transform);
+
+				arcs.append("svg:path")
+					.attr("fill", function(d, i) { return color(i); } )
+					.attr("d", arc);
+			});
+
+			function transformCountsFromObjectToArrayOfObjects(counts){
+				var output = []
+				for(var key in counts){
+					output.push({name: key, value: counts[key].value})
+				}
+				return output;
+			}
+
+			function bubbleSort(data){
+				for(var i = 1; i < data.length; i++){
+					data = propagateUp(data, i);
+				}
+
+				return data;
+			}
+
+			function propagateUp(data, index){
+				for(var i = index; i > 0; i--){
+					if(data[i].value > data[i-1].value){
+						var temp = data[i];
+						data[i] = data[i-1];
+						data[i-1] = temp;
+					}
+				}
+
+				return data;
+			}
+		};
+		drawPieChart("9349");
+		$('#dropdown').bind('input', function() {
+			var piechart = document.getElementById("piechart");
+			while (piechart.firstChild) {
+			    piechart.removeChild(piechart.firstChild);
+			}
+			drawPieChart($("#dropdown").val());
+		});
+
+	</script>
+</body>
+</html>
