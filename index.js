@@ -1,14 +1,11 @@
-var http = require('http');
+var express = require('express')
+var app = express();
+
+app.use('/', express.static(__dirname + '/src'));
+app.get('*',function (req, res) {
+        res.redirect('/index.html');
+    });
 
 const PORT=8080; 
 
-function handleRequest(request, response){
-    response.end('It Works!! Path Hit: ' + request.url);
-}
-
-var server = http.createServer(handleRequest);
-
-server.listen(PORT, function(){
-    //Callback triggered when server is successfully listening. Hurray!
-    console.log("Server listening on: http://localhost:%s", PORT);
-});
+app.listen(PORT, function() { console.log('listening on port '+ PORT + "...")});
