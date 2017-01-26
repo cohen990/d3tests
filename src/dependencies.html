@@ -71,7 +71,7 @@ d3.json("dependencies.json", function(error, graph) {
 
 	var text = nodeContainers
 		.append("text")
-		.text(function(d) { return d.id; })
+		.text(function(d) { return d.id + "\n(" + d.groupname + ")"; })
 		.attr("font-family", "sans-serif")
 		.attr("font-size", "20px")
 		.attr("font-weight", "bold")
