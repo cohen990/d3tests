@@ -51,35 +51,11 @@
 
 			var counts = {};
 			d3.csv(userId+".csv", function(data) {
-				var key = data.Restaurantname;
-				if (!counts[key]){
-					counts[key] = {value: 1};
-				}
-				else{
-					counts[key].value = counts[key].value + 1;
-				}
+				counts = addKeyToCounts(data, counts);
 			}, function(error, classes) {
 				if (error) throw error;
 
-
-				var dataAsArray = transformCountsFromObjectToArrayOfObjects(counts);
-				var sortedData = bubbleSort(dataAsArray);
-				console.log("Found orders from " + sortedData.length + " restaurants. Using top 20")
-
-
-				var pie = d3.pie()
-					.value(function(d) { return d.value; })(sortedData.slice(0, 20));
-
-				var arcs = svg.selectAll("g.slice")
-					.data(pie)
-					.enter()
-					.append("svg:g")
-					.attr("class", "slice")
-					.attr("transform", transform);
-
-				arcs.append("svg:path")
-					.attr("fill", function(d, i) { return color(i); } )
-					.attr("d", arc);
+				processData(counts);
 			});
 
 			function transformCountsFromObjectToArrayOfObjects(counts){
@@ -109,8 +85,40 @@
 
 				return data;
 			}
+
+			function processData(data){
+				var dataAsArray = transformCountsFromObjectToArrayOfObjects(data);
+				var sortedData = bubbleSort(dataAsArray);
+				console.log("Found orders from " + sortedData.length + " restaurants. Using top 20")
+
+
+				var pie = d3.pie()
+					.value(function(d) { return d.value; })(sortedData.slice(0, 20));
+
+				var arcs = svg.selectAll("g.slice")
+					.data(pie)
+					.enter()
+					.append("svg:g")
+					.attr("class", "slice")
+					.attr("transform", transform);
+
+				arcs.append("svg:path")
+					.attr("fill", function(d, i) { return color(i); } )
+					.attr("d", arc);
+			}
+
+			function addKeyToCounts(data, counts){
+				var key = data.Restaurantname;
+				if (!counts[key]){
+					counts[key] = {value: 1};
+				}
+				else{
+					counts[key].value = counts[key].value + 1;
+				}
+				return counts;
+			}
 		};
-		drawPieChart("9349");
+		drawPieChart($("#dropdown").val());
 		$('#dropdown').bind('input', function() {
 			var piechart = document.getElementById("piechart");
 			while (piechart.firstChild) {
