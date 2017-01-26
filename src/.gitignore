@@ -1,3 +1,7 @@
 *.csv
 
 !sample.csv
+
+*.json
+
+!miserables.json
