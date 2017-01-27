@@ -20,10 +20,50 @@
 	stroke-width: 1.5px;
 }
 
+.displayNone{
+	display:none;
+}
+
+circle.faded{
+	opacity:0.3;
+}
+
+line.faded{
+	opacity:0.1;
+}
+
+.hidden-label{
+	display:none;
+}
+
+.label{
+	font-family:sans-serif;
+	font-size: 20px;
+	font-weight:bold;
+	fill:grey;
+}
+.active-text{
+	font-size:22px;
+	fill:black;
+}
+
 </style>
 <svg width="1500" height="1000"></svg>
+<div id="selected-node-data" class="displayNone">
+	<div id="selected-node-name"></div>
+	<div id="selected-node-group"></div>
+	<div id="selected-node-repo"></div>
+	<div id="selected-node-connections">
+		<label for="node-connections-in">Dependencies incoming</label>
+		<div id="node-connections-in"><ul></ul></div>
+		<label for="node-connections-out">Dependencies outgoing</label>
+		<div id="node-connections-out"><ul></ul></div>
+	</div>
+</div>
 <script src="https://d3js.org/d3.v4.min.js"></script>
 <script>
+
+var active = "";
 
 var svg = d3.select("svg"),
 	width = +svg.attr("width"),
@@ -36,14 +76,17 @@ var simulation = d3.forceSimulation()
 	.force("charge", d3.forceManyBody().strength(-3000))
 	.force("center", d3.forceCenter(width / 2, height / 2));
 
+
 d3.json("dependencies.json", function(error, graph) {
 	if (error) throw error;
-	var radiusByNodeId = getRadiusesFromLinks(graph.links);
+
+	processAndStoreGraph(graph);
 	var link = svg.append("g")
 		.attr("class", "links")
 		.selectAll("line")
 		.data(graph.links)
 		.enter().append("line")
+		.attr("class", function(d) {return escapeIdNameForAttributes(d.source) + "-link " + escapeIdNameForAttributes(d.target) + "-link";})
 		.attr("stroke-width", function(d) { return Math.sqrt(d.value); });
 
 	var nodeContainers = svg.append("g")
@@ -59,7 +102,8 @@ d3.json("dependencies.json", function(error, graph) {
 
 	var node = nodeContainers
 		.append("circle")
-		.attr("r", function(d) { return radiusByNodeId[d.id];})
+		.attr("r", function(d) { return graphData.radiusByNodeId[d.id];})
+		.attr("id", function(d){return getCircleIdFromConnectionId(d.id); })
 		.attr("fill", function(d) { return color(graph.groups[d.groupname]); });
 
 	node.append("title")
@@ -68,11 +112,8 @@ d3.json("dependencies.json", function(error, graph) {
 	var text = nodeContainers
 		.append("text")
 		.text(function(d) { return d.id + "\n(" + d.groupname + ")"; })
-		.attr("font-family", "sans-serif")
-		.attr("font-size", "20px")
-		.attr("font-weight", "bold")
-		.attr("fill", "black")
-		.attr("style", "display:none;")
+		.attr("class", "label hidden-label")
+		.attr("id", function(d) {return escapeIdNameForAttributes(d.id) + "-text";})
 		.attr("text-anchor", "middle");
 
 	simulation
@@ -120,31 +161,45 @@ function dragended(d) {
 }
 
 var hoverIsEnabled = true;
+var nodeMouseInteractionTarget = ".nodeContainers > g";
 $(document).ready(function(){
-	$(document).mousedown(function(event){
+	$("svg").mousedown(function(event){
 		setHover(false);
+		unsetActive();
 	});
 	$(document).mouseup(function(event){
 		setHover(true);
 	});
-	$(".nodeContainers > g").hover(function(event){
-		if(event.currentTarget)
-		if(hoverIsEnabled){
-			setDisplay(this, "block")
-		}
-	},
-	function(event){
-		setDisplay(this, "none")
+	$(nodeMouseInteractionTarget).hover(
+		function(event){
+			if(hoverIsEnabled){
+				setDisplay($(this).find("text"), true)
+			}
+		},
+		function(event){
+			if(active == "" || $(event.currentTarget).find("title").text().split("\n")[0] != active){
+				setDisplay($(this).find("text"), false);
+			}
+		});
+	$(nodeMouseInteractionTarget).click(function(event){
+		setActive($(event.currentTarget).find("title").text());
 	});
 });
+
 
 function setHover(setting){
 	hoverIsEnabled = setting;
 }
 
-function setDisplay(self, display){
-	var nodeSelection = d3.select(self);
-	nodeSelection.select("text").attr("style","display:"+display+";");
+function setDisplay(text, display){
+	if(display){
+		text.removeClass("hidden-label")
+		text.addClass("active-label")
+	}
+	else{
+		text.addClass("hidden-label")
+		text.removeClass("active-label")
+	}
 }
 
 function getRadiusesFromLinks(links){
@@ -186,8 +241,164 @@ function getLinkStrengthFromGraph(link, graph){
 	        }
 	    }
 	});
-	console.log("weighting for link: " + weighting, link)
 	return Math.sqrt(Math.sqrt(weighting/100))	;
+}
+
+function setActive(nodeName){
+	unsetActive();
+	var text = $("#" + escapeIdNameForAttributes(nodeName) + "-text");
+	text.addClass("active-text")
+	setDisplay(text, true);
+	active = nodeName;
+	$("#selected-node-data").removeClass("displayNone")
+	var node = graphData.nodes[nodeName];
+	$("#selected-node-name").text(nodeName);
+	$("#selected-node-group").text(node.group);
+	$("#selected-node-repo").html("<a href=" + node.repository + ">" + node.repository + "</a>");
+
+	var nodeIn = $("#node-connections-in");
+	if(node.strongestLinks.in.length == 0){
+		nodeIn.html("no data");
+	}
+	else{
+		nodeIn.html("<ul></ul>");
+		for(var dep in node.strongestLinks.in){
+			var dependency = node.strongestLinks.in[dep];
+			nodeIn.append("<li>" + dependency.source.id + ":" + dependency.value + "</li>");
+		}
+	}
+	var nodeOut = $("#node-connections-out");
+	if(node.strongestLinks.out.length == 0){
+		nodeOut.html("no data");
+	}
+	else{
+		nodeOut.html("<ul></ul>");
+		for(var dep in node.strongestLinks.out){
+			var dependency = node.strongestLinks.out[dep];
+			nodeOut.append("<li>" + dependency.source.id + ":" + dependency.value + "</li>");
+		}
+	}
+
+	dimDistantCircles(nodeName);
+	dimDisconnectedLinks(nodeName);
+}
+
+var graphData = {};
+function processAndStoreGraph(inGraph){
+	graphData.radiusByNodeId = getRadiusesFromLinks(inGraph.links);
+	graphData.nodes = {}
+	for(var nodeIndex in inGraph.nodes){
+		var node = inGraph.nodes[nodeIndex];
+
+		graphData.nodes[node.id] = {
+			"group":node.groupname,
+			"repository":node.repository,
+			"strongestLinks":getStrongestDependencies(inGraph.links, node.id),
+			"firstDegreeConnections":getFirstDegreeConnections(inGraph.links, node.id)
+		}
+	}
+}
+
+function getStrongestDependencies(links, targetId){
+	var numOfDependenciesToGet = 3;
+	var result = {
+		"in":[],
+		"out":[]
+	};
+
+	var inList = [];
+	var outList = [];
+
+	for(var link in links){
+		var link = links[link];
+		if(link.source == targetId){
+			outList.push(link);
+		}
+		else if(link.target == targetId){
+			inList.push(link);
+		}
+	}
+
+	while(inList.length > 0 && result.in.length <= numOfDependenciesToGet){
+		var highest = {"name":"", "value":0};
+		var indexOfHighest = 0;
+		for(var i in inList){
+			if(inList[i].value > highest.value){
+				highest = inList[i];
+				indexOfHighest = i;
+			}
+		}
+		inList.splice(indexOfHighest, 1);
+
+		result.in.push(highest);
+	}
+
+	while(outList.length > 0 && result.out.length <= numOfDependenciesToGet){
+		var highest = {"name":"", "value":0};
+		var indexOfHighest = 0;
+		for(var i in outList){
+			if(outList[i].value > highest.value){
+				highest = outList[i];
+				indexOfHighest = i;
+			}
+		}
+
+		outList.splice(indexOfHighest, 1);
+
+		result.out.push(highest);
+	}
+	return result;
+}
+
+function getFirstDegreeConnections(links, targetId){
+	var firstDegrees = [];
+	for(var index in links){
+		var link = links[index];
+
+		if(targetId == link.source){
+			firstDegrees.push(link.target)
+		}
+		else if(targetId == link.target){
+			firstDegrees.push(link.source);
+		}
+	}
+
+	return firstDegrees;
+}
+
+function dimDistantCircles(sourceId){
+	var connections = graphData.nodes[sourceId].firstDegreeConnections;
+	connections.push(sourceId);
+	$("circle").addClass("faded");
+	for(var i in connections){
+		var connection = connections[i];
+		var circleId = getCircleIdFromConnectionId(connection);
+		var circle = $("[id='"+circleId+"']");
+		circle.removeClass("faded");
+	}
+}
+
+function getCircleIdFromConnectionId(id){
+	return "#" + escapeIdNameForAttributes(id) + "circle";
+}
+
+function escapeIdNameForAttributes(id){
+	return id.replace(/\./g, '');
+}
+
+function dimDisconnectedLinks(sourceId){
+	$(".links line").addClass("faded");
+	var searchableClassName = "." + escapeIdNameForAttributes(sourceId) + "-link";
+	$(searchableClassName).removeClass("faded");
+}
+
+function unsetActive(){
+	$("#selected-node-data").addClass("displayNone");
+	$(".faded").removeClass("faded");
+	$(".active-label").addClass("hidden-label");
+	$(".active-label").removeClass(".active-label");
+	$(".active-text").removeClass(".active-text");
+	active = "";
 }
 </script>
 </body>
